@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LoveLat 回信產生器</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>[hidden]{display:none!important}</style>
+<style id="appStyle">
+/* Layout: 左欄填審核結果、右欄即時產出中韓兩版信件；手機寬度上下堆疊 */
+:root {
+  --bg: #f6f4f6;
+  --panel: #ffffff;
+  --fg: #231c24;
+  --muted: #6f6470;
+  --line: #e3dce3;
+  --accent: #b23a63;
+  --accent-soft: #f6e4ea;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --ok: #2f7a4f;
+  --font-body: "Noto Sans TC", "Noto Sans KR", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-kr: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #18141a; --panel: #221d24; --fg: #efe8ef; --muted: #a99da9; --line: #3a313b;
+    --accent: #e7799c; --accent-soft: #3b2230; --warn: #f0b860; --warn-soft: #3a2c16; --ok: #7cc79b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #18141a; --panel: #221d24; --fg: #efe8ef; --muted: #a99da9; --line: #3a313b;
+  --accent: #e7799c; --accent-soft: #3b2230; --warn: #f0b860; --warn-soft: #3a2c16; --ok: #7cc79b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 48px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 20px; }
+header h1 { font-size: 22px; margin: 0; letter-spacing: .01em; text-wrap: balance; }
+header p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.grid { display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.form { display: grid; gap: 18px; }
+.field { display: grid; gap: 6px; }
+.label { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .06em; }
+input[type=text], input[type=email], input[type=number], textarea {
+  width: 100%; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 10px;
+}
+textarea { resize: vertical; min-height: 60px; }
+input:focus-visible, textarea:focus-visible, button:focus-visible, .seg label:has(input:focus-visible) {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg label { position: relative; cursor: pointer; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg span { display: inline-block; padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; background: var(--bg); }
+.seg input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--panel); font-weight: 500; }
+.codes { display: grid; gap: 6px; }
+.code-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; }
+.code-hit { display: flex; align-items: center; gap: 10px; cursor: pointer; min-width: 0; }
+.code-hit input { accent-color: var(--accent); margin: 0; }
+.code-row.on { border-color: var(--accent); background: var(--accent-soft); }
+.code-id { font-family: var(--font-mono); font-size: 12px; color: var(--accent); min-width: 28px; }
+.code-name { font-size: 14px; }
+.code-row input[type=number] { width: 64px; padding: 4px 6px; }
+.code-row .need { font-size: 12px; color: var(--muted); }
+.order { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--accent-soft); font-size: 13px; }
+.chip button { border: 0; background: transparent; color: var(--muted); cursor: pointer; font: inherit; padding: 0 5px; border-radius: 4px; }
+.chip button:hover { color: var(--fg); }
+.btn { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); font-weight: 500; }
+.btn.small { font-size: 12px; padding: 3px 8px; }
+.hint { font-size: 13px; color: var(--muted); margin: 0; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 18px; }
+fieldset[disabled] { opacity: .45; }
+.outs { display: grid; gap: 16px; min-width: 0; }
+.notes { display: grid; gap: 6px; }
+.note { font-size: 13px; padding: 8px 12px; border-radius: 6px; background: var(--warn-soft); color: var(--warn); }
+.mail-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+.mail-head h2 { font-size: 15px; margin: 0; display: flex; align-items: center; gap: 8px; }
+.badge { font-size: 11px; font-weight: 700; letter-spacing: .06em; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--panel); }
+.badge.ref { background: var(--line); color: var(--muted); }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.to { font-size: 13px; color: var(--muted); margin-bottom: 8px; word-break: break-all; }
+.subject { font-weight: 700; padding: 8px 0 10px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.body p { margin: 0 0 12px; }
+.body ol { margin: 0 0 12px; padding-left: 22px; }
+.body li { margin-bottom: 10px; }
+.mail.ko .subject, .mail.ko .body { font-family: var(--font-kr); }
+.toast { font-size: 13px; color: var(--ok); min-height: 1em; }
+.foot { font-size: 12px; color: var(--muted); }
+.exports { margin-top: 12px; align-items: center; }
+#pdfSheet { position: fixed; left: -10000px; top: 0; width: 720px; background: #ffffff; color: #1a1a1a; font-family: var(--font-body); font-size: 14px; line-height: 1.7; padding: 8px; }
+#pdfSheet h2 { font-size: 16px; margin: 0 0 6px; }
+#pdfSheet .meta { color: #555; font-size: 12px; margin-bottom: 10px; }
+#pdfSheet .subj { font-weight: 700; border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 10px; }
+#pdfSheet p { margin: 0 0 10px; }
+#pdfSheet ol { margin: 0 0 10px; padding-left: 22px; }
+#pdfSheet li { margin-bottom: 8px; }
+#pdfSheet .ko { font-family: var(--font-kr); }
+#pdfSheet section + section { page-break-before: always; }
+@media (prefers-reduced-motion: no-preference) { .code-row, .btn { transition: border-color .15s, background .15s; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>LoveLat 回信產生器</h1>
+    <p>選好審核結果和建議，右邊會組好中韓兩版信件，按複製後貼進信件即可，粗體和編號會保留。</p>
+    <div class="actions exports" id="exports" hidden="">
+      <button type="button" class="btn small" id="dlHtml">下載這個工具（HTML）</button>
+      <button type="button" class="btn small" id="dlPdf">匯出這封信（PDF）</button>
+      <button type="button" class="btn small" id="dlMd">匯出這封信（Markdown）</button>
+      <span class="toast" id="exportToast" aria-live="polite"></span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <form class="panel form" id="form" autocomplete="off">
+      <div class="field">
+        <label class="label" for="email">收件人 EMAIL</label>
+        <input type="email" id="email" placeholder="user@naver.com">
+      </div>
+
+      <div class="field">
+        <span class="label">寄出語言</span>
+        <div class="seg" role="radiogroup" aria-label="寄出語言">
+          <label><input type="radio" name="lang" id="lang-zh" value="zh"><span>中文</span></label>
+          <label><input type="radio" name="lang" id="lang-ko" value="ko" checked=""><span>韓文</span></label>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="label">審核結果</span>
+        <div class="seg" role="radiogroup" aria-label="審核結果">
+          <label><input type="radio" name="result" id="res-pass" value="pass"><span>通過</span></label>
+          <label><input type="radio" name="result" id="res-adjust" value="adjust" checked=""><span>通過・需調整</span></label>
+          <label><input type="radio" name="result" id="res-fail" value="fail"><span>未通過</span></label>
+        </div>
+      </div>
+
+      <fieldset id="adjustSet">
+        <div class="field">
+          <span class="label">想吸引的對象</span>
+          <div class="seg" role="radiogroup" aria-label="對象">
+            <label><input type="radio" name="target" id="tg-f" value="f" checked=""><span>女性</span></label>
+            <label><input type="radio" name="target" id="tg-m" value="m"><span>男性</span></label>
+            <label><input type="radio" name="target" id="tg-n" value="n"><span>不指定</span></label>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="label">照片建議（點選順序＝信中順序）</span>
+          <div class="codes" id="codes"></div>
+        </div>
+
+        <div class="field" id="orderField">
+          <span class="label">目前順序</span>
+          <div class="order" id="order"></div>
+        </div>
+
+      </fieldset>
+
+      <div class="actions">
+        <button type="button" class="btn" id="reset">清空，換下一位</button>
+      </div>
+    </form>
+
+    <div class="outs">
+      <div class="notes" id="notes"></div>
+      <section class="panel mail" id="mail-ko"></section>
+      <section class="panel mail" id="mail-zh"></section>
+      <p class="foot">建議文案來自「LoveLat 照片審核回信資料庫」2026-11-04 版。資料庫更新後，這個工具要重新發布才會同步。</p>
+    </div>
+  </div>
+</div>
+<div id="pdfSheet" aria-hidden="true"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script id="app">
+// 開頁當下先留一份乾淨的原始碼，下載離線版時用它重組，避免帶到線上環境的設定
+const APP_SRC = document.currentScript ? document.currentScript.textContent : "";
+const WRAP_SRC = document.querySelector(".wrap").outerHTML;
+const TARGET = {
+  f: { zh: "女性使用者", ko: "여성 회원분들" },
+  m: { zh: "男性使用者", ko: "남성 회원분들" },
+  n: { zh: "其他使用者", ko: "다른 회원분들" }
+};
+
+const CODES = [
+  { id: "P1", name: "笑容照改當主照", needN: true, koOk: true,
+    zh: { t: "建議將第{n}張（帶有笑容）的照片調至第一張", e: "😊", b: "第一張照片是決定{對象}對你第一印象的關鍵。自然流露的微笑不僅能大幅提升親切感，也能提高對方點開你檔案細看的意願喔！" },
+    ko: { t: "{n}번째 사진(웃고 계신 사진)을 첫 번째로 옮겨 보세요", e: "😊", b: "첫 번째 사진은 {대상}이 회원님에 대한 첫인상을 결정하는 가장 중요한 요소입니다. 자연스러운 미소는 친근감을 크게 높여줄 뿐 아니라, 상대방이 회원님의 프로필을 자세히 살펴보고 싶게 만들어 준답니다!" } },
+  { id: "P2", name: "增加動作與情境的多樣性", koOk: true,
+    zh: { t: "增加照片動作與情境的多樣性", e: "🤹‍♀️", b: "建議將後續幾張照片替換成不同姿勢、動作或拍照角度，或者將其中一張換成戶外旅遊照片。豐富的照片風格能展現你多面向的魅力，讓對方對你產生更多興趣！" },
+    ko: { t: "사진 속 동작과 상황을 더 다양하게 구성해 보세요", e: "🤹‍♀️", b: "이어지는 사진들을 다른 포즈나 동작, 촬영 각도의 사진으로 바꾸시거나, 그중 한 장을 야외 여행 사진으로 교체하시는 것을 추천드립니다. 다채로운 분위기의 사진은 회원님의 여러 가지 매력을 보여주어, 상대방이 회원님에게 더 큰 관심을 갖게 해줄 거예요!" } },
+  { id: "P3", name: "加一張全身照",
+    zh: { t: "加入一張全身照", e: "👟", b: "只有臉部特寫時，對方很難想像你的整體樣子。一張自然的全身照能讓人更快建立完整印象，也更有安全感！" },
+    ko: { t: "전신 사진을 한 장 추가해 보세요", e: "👟", b: "얼굴 위주의 사진만 있으면 상대방이 회원님의 전체적인 모습을 상상하기 어려워요. 자연스러운 전신 사진 한 장이 있으면 첫인상이 더 또렷해지고 신뢰감도 높아진답니다!" } },
+  { id: "P4", name: "減少濾鏡與美顏",
+    zh: { t: "減少濾鏡與美顏效果", e: "📷", b: "濾鏡太重容易讓見面時的落差變大，反而降低信任感。保留自然膚色與光線的照片，會讓人覺得更真誠、更好親近！" },
+    ko: { t: "필터와 보정을 조금 줄여 보세요", e: "📷", b: "보정이 강한 사진은 실제로 만났을 때 차이가 느껴질 수 있어 오히려 신뢰감을 낮출 수 있어요. 자연스러운 피부 톤과 빛이 살아 있는 사진이 더 진솔하고 편안한 인상을 준답니다!" } },
+  { id: "P5", name: "光線暗或畫質模糊", needN: true,
+    zh: { t: "將第{n}張換成光線充足、畫質清晰的照片", e: "☀️", b: "光線偏暗或模糊的照片不容易看清你的樣子。白天在窗邊或戶外用自然光拍，效果通常最好！" },
+    ko: { t: "{n}번째 사진을 밝고 선명한 사진으로 바꿔 보세요", e: "☀️", b: "어둡거나 흐릿한 사진은 회원님의 모습을 알아보기 어려워요. 낮에 창가나 야외의 자연광에서 찍으면 가장 좋은 결과를 얻을 수 있답니다!" } },
+  { id: "P6", name: "主照臉被遮住（墨鏡、口罩、帽子）",
+    zh: { t: "第一張照片建議露出完整臉部", e: "🙂", b: "墨鏡、口罩或帽子遮住臉時，對方很難判斷第一印象。主照建議選一張五官清楚的照片，遮臉的照片可以放在後面當生活照！" },
+    ko: { t: "첫 번째 사진은 얼굴이 잘 보이는 사진으로 골라 보세요", e: "🙂", b: "선글라스나 마스크, 모자로 얼굴이 가려지면 상대방이 첫인상을 판단하기 어려워요. 대표 사진은 이목구비가 선명한 사진으로 하시고, 얼굴이 가려진 사진은 뒤쪽에 일상 사진으로 활용해 보세요!" } },
+  { id: "P7", name: "主照是多人合照",
+    zh: { t: "主照建議使用單人照", e: "👤", b: "多人合照容易讓對方分不出哪一位是你。第一張放單人照、合照留在後面，還能順便展現你的社交生活！" },
+    ko: { t: "대표 사진은 단독 사진으로 설정해 보세요", e: "👤", b: "여러 명이 함께 찍은 사진은 어느 분이 회원님인지 헷갈릴 수 있어요. 첫 번째 사진은 혼자 나온 사진으로, 단체 사진은 뒤쪽에 두시면 회원님의 활발한 일상도 함께 보여줄 수 있답니다!" } },
+  { id: "P8", name: "加入興趣生活照",
+    zh: { t: "加入一張展現興趣的生活照", e: "🎾", b: "運動、旅行、做菜，或任何你喜歡的事都可以。興趣照片能自然製造聊天話題，讓對方更容易開口認識你！" },
+    ko: { t: "취미가 드러나는 일상 사진을 추가해 보세요", e: "🎾", b: "운동, 여행, 요리 등 회원님이 좋아하는 것이라면 무엇이든 좋아요. 취미 사진은 자연스럽게 대화 주제를 만들어 주어, 상대방이 먼저 말을 걸기 쉬워진답니다!" } },
+  { id: "P9", name: "全是自拍",
+    zh: { t: "加入幾張別人幫你拍的照片", e: "📸", b: "全部都是自拍時，角度和距離容易重複。請朋友幫忙拍幾張不同距離的照片，檔案看起來會更自然、更有層次！" },
+    ko: { t: "다른 사람이 찍어 준 사진도 추가해 보세요", e: "📸", b: "모두 셀카로만 구성되면 각도와 거리가 비슷해 보이기 쉬워요. 친구에게 다양한 거리에서 몇 장 찍어 달라고 부탁해 보시면 프로필이 훨씬 자연스럽고 풍성해 보인답니다!" } },
+  { id: "P10", name: "照片太少",
+    zh: { t: "建議將照片補到至少 4 張", e: "🖼️", b: "照片太少時，對方比較難認識你的不同面向。多幾張不同場景的照片，能提高對方點開細看的意願！" },
+    ko: { t: "사진을 최소 4장 이상으로 채워 보세요", e: "🖼️", b: "사진이 적으면 상대방이 회원님의 다양한 모습을 알기 어려워요. 여러 장면의 사진을 더하면 상대방이 프로필을 자세히 살펴볼 가능성이 훨씬 높아진답니다!" } },
+  { id: "P11", name: "首張背景雜亂",
+    zh: { t: "首張照片建議換成背景乾淨的照片", e: "🌿", b: "背景太雜亂時，{對象}的視線很容易被分散。換成乾淨簡單的背景，能讓對方一眼就把注意力放在你身上，第一印象也會更清爽喔！" },
+    ko: { t: "첫 번째 사진은 배경이 깔끔한 사진으로 바꿔 보세요", e: "🌿", b: "배경이 복잡하면 {대상}의 시선이 분산되기 쉬워요. 깔끔하고 단순한 배경의 사진으로 바꾸시면 상대방이 한눈에 회원님에게 집중할 수 있고, 첫인상도 훨씬 산뜻해진답니다!" } },
+  { id: "P12", name: "首張不是清楚的正臉（側臉、背影、距離太遠）",
+    zh: { t: "首張照片建議使用清晰的正臉照", e: "🌟", b: "側臉、背影或距離太遠的照片，對方不容易看清你的樣子。第一張放一張五官清楚的正面照，能讓{對象}更快認識你，也更有信任感！" },
+    ko: { t: "첫 번째 사진은 얼굴이 선명하게 나온 정면 사진으로 해 보세요", e: "🌟", b: "옆모습이나 뒷모습, 멀리서 찍은 사진은 상대방이 회원님의 모습을 알아보기 어려워요. 첫 번째 사진에 이목구비가 또렷한 정면 사진을 두시면 {대상}이 회원님을 더 빨리 알아갈 수 있고 신뢰감도 높아진답니다!" } }
+];
+
+const LIST = "{LIST}";
+const TPL = {
+  zh: {
+    pass: { s: "LoveLat 戀愛緯度- 真人驗證 審核結果： 通過🎉", p: [
+      "你好！", "恭喜你成功通過 LoveLat 真人驗證！",
+      "為了幫助你打造更有吸引力的個人檔案，讓其他使用者更容易認識你，我們整理了照片優化的小建議，提供你參考：",
+      "<b>你的照片整體拍得很棒！😊</b> 目前的照片已經很有個人特色，也能自然地展現你的魅力，暫時沒有特別需要調整的地方喔！",
+      "建議你可以每 <b>2～3 個月定期更新照片</b>，分享近期的生活點滴，讓其他使用者看見不同面向的你！",
+      "<b>✨小提醒：</b> 不需要刻意追求完美，最重要的是透過照片展現真實的自己與生活中的不同面貌。希望這些小建議能幫助你打造更有吸引力的個人檔案，在 LoveLat 遇見更多值得認識、彼此欣賞的人！",
+      "祝你在 LoveLat 有愉快的交流體驗！" ] },
+    adjust: { s: "LoveLat 戀愛緯度- 真人驗證 審核結果： 通過🎉", p: [
+      "你好！", "恭喜你成功通過 LoveLat 真人驗證！",
+      "為了幫助你打造更有吸引力的個人檔案，讓其他使用者更容易認識你，我們整理了照片優化的小建議，提供你參考：",
+      LIST,
+      "<b>✨小提醒：</b> 不需要刻意追求完美，最重要的是透過照片展現真實的自己與生活中的不同面貌。希望這些小建議能幫助你打造更有吸引力的個人檔案，在 LoveLat 遇見更多值得認識、彼此欣賞的人！",
+      "祝你在 LoveLat 有愉快的交流體驗！" ] },
+    fail: { s: "LoveLat 戀愛緯度- 真人驗證 審核結果： 未通過", p: [
+      "您好😊", "感謝您使用 LoveLat！", "很抱歉，您的真人驗證目前未能通過審核。",
+      "為了維護平台的真實性與安全性，並保障所有使用者的交友體驗，LoveLat 要求個人檔案皆須使用使用者本人的真實照片。",
+      "<b>審核結果：需重新審核</b>",
+      "由於目前上傳的照片無法清晰辨識為本人（例如：使用風景/寵物照片），導致系統未能順利通過比對。",
+      "再麻煩您回到 App 重新上傳一張清晰的個人正面照片，以便我們將您的真人驗證影片與照片進行比對，盡快為您完成審核。",
+      "感謝您的配合與理解！" ] }
+  },
+  ko: {
+    pass: { s: "LoveLat - 실물 인증 심사 결과: 승인🎉", p: [
+      "안녕하세요!", "LoveLat 실물 인증을 성공적으로 완료하신 것을 축하드립니다!",
+      "더욱 매력적인 프로필을 만들고 다른 회원분들이 회원님을 더 쉽게 알아갈 수 있도록, 사진 개선에 도움이 될 만한 몇 가지 팁을 준비했습니다.",
+      "<b>전체적으로 사진을 정말 잘 찍으셨어요!😊</b> 현재 사진에는 회원님만의 개성이 잘 드러나고, 자연스럽게 매력을 보여주고 있어 특별히 수정할 부분은 없습니다!",
+      "다만, <b>2~3개월마다 정기적으로 프로필 사진을 업데이트</b>하여 최근의 일상을 공유해 보시는 것을 추천드립니다. 이를 통해 다른 회원분들에게 회원님의 다양한 매력을 보여줄 수 있습니다!",
+      "<b>✨작은 팁:</b> 완벽한 사진을 추구하기보다는, 사진을 통해 있는 그대로의 자신과 일상 속 다양한 모습을 자연스럽게 보여주는 것이 가장 중요합니다.",
+      "이번에 드린 작은 팁들이 회원님의 프로필을 더욱 매력적으로 만드는 데 도움이 되기를 바랍니다. LoveLat에서 서로를 알아가고, 서로의 매력을 발견할 수 있는 소중한 인연을 만나시길 바랍니다!",
+      "LoveLat에서 즐겁고 행복한 소통을 이어가시길 바랍니다!" ] },
+    adjust: { s: "LoveLat - 실물 인증 심사 결과: 승인🎉", p: [
+      "안녕하세요!", "LoveLat 실물 인증을 성공적으로 완료하신 것을 축하드립니다!",
+      "더 매력적인 프로필로 다른 회원분들이 회원님을 더 쉽게 알아갈 수 있도록, 사진 개선을 위한 몇 가지 팁을 정리해 드렸습니다.",
+      LIST,
+      "<b>✨작은 팁:</b> 완벽한 사진을 찍으려고 노력하기보다는, 사진을 통해 있는 그대로의 자신과 일상 속 다양한 모습을 자연스럽게 보여주는 것이 가장 중요합니다.",
+      "이번에 드린 작은 팁들이 회원님의 프로필을 더욱 매력적으로 만드는 데 도움이 되기를 바랍니다. LoveLat에서 서로를 알아가고, 서로의 매력을 발견할 수 있는 소중한 인연을 만나시길 바랍니다!",
+      "LoveLat에서 즐겁고 행복한 소통을 이어가시길 바랍니다!" ] },
+    fail: { s: "LoveLat - 실물 인증 심사 결과: 미승인", p: [
+      "안녕하세요.", "LoveLat을 이용해 주셔서 감사합니다!",
+      "죄송하지만, 회원님의 실물 인증이 이번 심사에서 승인되지 않았습니다.",
+      "LoveLat은 플랫폼의 신뢰성과 안전을 지키고 모든 회원분들이 안심하고 만남을 이어갈 수 있도록, 프로필에 반드시 본인의 실제 사진을 사용하도록 하고 있습니다.",
+      "<b>심사 결과: 재심사 필요</b>",
+      "현재 업로드하신 사진으로는 본인 여부를 명확하게 확인하기 어려워(예: 풍경이나 반려동물 사진 사용), 시스템 대조가 정상적으로 완료되지 않았습니다.",
+      "번거로우시겠지만 앱에서 얼굴이 선명하게 나온 정면 사진을 한 장 다시 업로드해 주세요. 실물 인증 영상과 사진을 대조하여 최대한 빠르게 심사를 완료해 드리겠습니다.",
+      "협조해 주셔서 감사합니다!" ] }
+  }
+};
+
+// 範例狀態：一位韓國女性用戶，調整信，兩條代碼
+let selected = ["P1", "P3"];
+const nums = { P1: "4" };
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const strip = (h) => h.replace(/<br>/g, "\n").replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+const val = (name) => document.querySelector(`input[name=${name}]:checked`).value;
+
+function renderCodes() {
+  $("#codes").innerHTML = CODES.map(c => {
+    const on = selected.includes(c.id);
+    return `<div class="code-row${on ? " on" : ""}">
+      <label for="cb-${c.id}" class="code-hit">
+        <input type="checkbox" id="cb-${c.id}" data-code="${c.id}" ${on ? "checked" : ""}>
+        <span class="code-id">${c.id}</span>
+        <span class="code-name">${esc(c.name)}</span>
+      </label>
+      ${c.needN ? `<span class="need">第 <input type="number" min="1" max="20" id="n-${c.id}" data-n="${c.id}" value="${esc(nums[c.id] || "")}" aria-label="${c.id} 照片序號"> 張</span>` : "<span></span>"}
+    </div>`;
+  }).join("");
+}
+
+function renderOrder() {
+  const items = selected.map((id, i) => {
+    const c = CODES.find(x => x.id === id);
+    return `<span class="chip">${i + 1}. ${id} ${esc(c.name)}
+      <button type="button" data-up="${i}" aria-label="往前移" ${i === 0 ? "disabled" : ""}>↑</button>
+      <button type="button" data-del="${id}" aria-label="移除">✕</button></span>`;
+  });
+  $("#order").innerHTML = items.length ? items.join("") : `<span class="hint">還沒選任何代碼建議</span>`;
+}
+
+
+function fill(s, lang) {
+  const t = TARGET[val("target")][lang];
+  return s.replace(/\{對象\}/g, t).replace(/\{대상\}/g, t);
+}
+
+function items(lang, notes) {
+  const out = [];
+  selected.forEach(id => {
+    const c = CODES.find(x => x.id === id);
+    const d = c[lang];
+    let n = nums[id];
+    if (c.needN && !n) { n = "＿"; if (lang === "zh") notes.push(`${id} 需要填照片序號。`); }
+    const sub = (s) => fill(s.replace(/\{n\}/g, n), lang);
+    out.push({ t: esc(sub(d.t)), e: d.e, b: esc(sub(d.b)) });
+  });
+  return out;
+}
+
+function listHTML(its) {
+  if (!its.length) return { h: `<p>（尚未選擇建議）</p>`, t: "（尚未選擇建議）" };
+  const one = (x) => `<b>${x.t}</b>${x.e}${x.b ? "<br>" + x.b : ""}`;
+  if (its.length === 1) return { h: `<p>${one(its[0])}</p>`, t: strip(one(its[0])) };
+  return {
+    h: `<ol>${its.map(x => `<li>${one(x)}</li>`).join("")}</ol>`,
+    t: its.map((x, i) => `${i + 1}. ${strip(one(x))}`).join("\n\n")
+  };
+}
+
+const built = {};
+function build(lang, notes) {
+  const r = val("result");
+  const tpl = TPL[lang][r];
+  let html = "", text = [];
+  tpl.p.forEach(p => {
+    if (p === LIST) {
+      const l = listHTML(items(lang, notes));
+      html += l.h; text.push(l.t);
+    } else { html += `<p>${p}</p>`; text.push(strip(p)); }
+  });
+  built[lang] = { s: tpl.s, h: html, t: text.join("\n\n") };
+  const send = val("lang") === lang;
+  const email = $("#email").value.trim();
+  $("#mail-" + lang).className = "panel mail " + lang;
+  $("#mail-" + lang).innerHTML = `
+    <div class="mail-head">
+      <h2>${lang === "zh" ? "中文版" : "韓文版"} <span class="badge${send ? "" : " ref"}">${send ? "寄出這版" : "對照用"}</span></h2>
+      <div class="actions">
+        <button type="button" class="btn small" data-copy="${lang}-s">複製主旨</button>
+        <button type="button" class="btn small primary" data-copy="${lang}-b">複製內文</button>
+      </div>
+    </div>
+    ${send ? `<div class="to">收件人：${email ? esc(email) : "（未填）"}</div>` : ""}
+    <div class="subject" id="${lang}-subject">${esc(tpl.s)}</div>
+    <div class="body" id="${lang}-body">${html}</div>
+    <div class="toast" id="${lang}-toast" aria-live="polite"></div>`;
+}
+
+function update() {
+  const r = val("result");
+  $("#adjustSet").disabled = r !== "adjust";
+  const notes = [];
+  if (r === "adjust" && !selected.length) notes.push("「需調整」的信至少要有一條建議。");
+  const lang = val("lang");
+  const order = lang === "ko" ? ["ko", "zh"] : ["zh", "ko"];
+  order.forEach(l => build(l, notes));
+  $(".outs").insertBefore($("#mail-" + order[0]), $("#mail-" + order[1]));
+  $("#notes").innerHTML = r === "adjust" ? [...new Set(notes)].map(n => `<div class="note">${esc(n)}</div>`).join("") : "";
+}
+
+async function copy(lang, part, btn) {
+  const b = built[lang];
+  const toast = $(`#${lang}-toast`);
+  const done = (msg) => { toast.textContent = msg; setTimeout(() => { toast.textContent = ""; }, 2200); };
+  try {
+    if (part === "s") { await navigator.clipboard.writeText(b.s); }
+    else if (window.ClipboardItem) {
+      await navigator.clipboard.write([new ClipboardItem({
+        "text/html": new Blob([b.h], { type: "text/html" }),
+        "text/plain": new Blob([b.t], { type: "text/plain" })
+      })]);
+    } else { await navigator.clipboard.writeText(b.t); }
+    done(part === "s" ? "主旨已複製" : "內文已複製，貼進信件即可");
+  } catch (e) {
+    const el = $(`#${lang}-${part === "s" ? "subject" : "body"}`);
+    const range = document.createRange(); range.selectNodeContents(el);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    let ok = false; try { ok = document.execCommand("copy"); } catch (_) {}
+    done(ok ? "已複製" : "已幫你選取文字，按 Ctrl/⌘ + C 複製");
+  }
+}
+
+document.addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.dataset.code) {
+    const id = t.dataset.code;
+    selected = t.checked ? [...selected, id] : selected.filter(x => x !== id);
+    renderCodes(); renderOrder();
+  }
+  update();
+});
+document.addEventListener("input", (e) => {
+  const t = e.target;
+  if (t.dataset.n) { nums[t.dataset.n] = t.value; }
+  update();
+});
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.copy) { const [l, p] = t.dataset.copy.split("-"); copy(l, p, t); return; }
+  if (t.dataset.up) { const i = +t.dataset.up; [selected[i - 1], selected[i]] = [selected[i], selected[i - 1]]; renderOrder(); update(); }
+  if (t.dataset.del) { selected = selected.filter(x => x !== t.dataset.del); renderCodes(); renderOrder(); update(); }
+  if (t.id === "reset") {
+    selected = []; for (const k in nums) delete nums[k];
+    $("#email").value = ""; $("#res-adjust").checked = true; $("#tg-n").checked = true;
+    renderCodes(); renderOrder(); update();
+  }
+});
+$("#email").value = "example@naver.com";
+renderCodes(); renderOrder(); update();
+
+// ---- 匯出與下載 ----
+let dl = null;
+const standalone = location.protocol === "file:";   // 下載到電腦後直接開啟的版本
+function exportMsg(m) { const t = $("#exportToast"); t.textContent = m; setTimeout(() => { if (t.textContent === m) t.textContent = ""; }, 3000); }
+
+async function saveFile(filename, data) {
+  if (dl) {
+    try { await dl.save({ filename, data }); exportMsg("已下載"); }
+    catch (e) {
+      if (e && e.code === "declined") return;
+      if (e && e.code === "rate_limited") { exportMsg("上一個下載視窗還開著，稍後再試"); return; }
+      exportMsg("這個環境無法下載");
+    }
+    return;
+  }
+  const blob = data instanceof Blob ? data : new Blob([data], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+function order() { return val("lang") === "ko" ? ["ko", "zh"] : ["zh", "ko"]; }
+function fileBase() {
+  const e = $("#email").value.trim().replace(/[^\w.@+-]/g, "");
+  return "LoveLat回信_" + (e || "未填收件人");
+}
+
+function htmlToMd(html) {
+  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, "text/html");
+  const inline = (node) => [...node.childNodes].map(n => {
+    if (n.nodeType === 3) return n.textContent;
+    if (n.nodeName === "B") return `**${n.textContent}**`;
+    if (n.nodeName === "BR") return "\n";
+    return inline(n);
+  }).join("");
+  return [...doc.body.firstChild.children].map(el => {
+    if (el.nodeName === "OL") return [...el.children].map((li, i) => `${i + 1}. ` + inline(li).replace(/\n/g, "  \n   ")).join("\n");
+    return inline(el).replace(/\n/g, "  \n");
+  }).join("\n\n");
+}
+
+function buildMd() {
+  const email = $("#email").value.trim() || "（未填）";
+  const parts = [`# LoveLat 真人驗證回信`, `收件人：${email}`];
+  order().forEach((l, i) => {
+    const b = built[l];
+    parts.push(`## ${l === "zh" ? "中文版" : "韓文版"}${i === 0 ? "（寄出版本）" : "（對照用）"}`);
+    parts.push(`**主旨：** ${b.s}`);
+    parts.push(htmlToMd(b.h));
+  });
+  return parts.join("\n\n") + "\n";
+}
+
+async function buildPdf() {
+  const sheet = $("#pdfSheet");
+  const email = $("#email").value.trim() || "（未填）";
+  sheet.innerHTML = order().map((l, i) => `<section class="${l}">
+      <h2>${l === "zh" ? "中文版" : "韓文版"}${i === 0 ? "（寄出版本）" : "（對照用）"}</h2>
+      <div class="meta">收件人：${esc(email)}</div>
+      <div class="subj">${esc(built[l].s)}</div>
+      ${built[l].h}
+    </section>`).join("");
+  try { await document.fonts.ready; } catch (_) {}
+  const blob = await html2pdf().set({
+    margin: 14, image: { type: "jpeg", quality: 0.95 },
+    html2canvas: { scale: 2, backgroundColor: "#ffffff" },
+    jsPDF: { unit: "mm", format: "a4" }, pagebreak: { mode: ["css"] }
+  }).from(sheet).outputPdf("blob");
+  sheet.innerHTML = "";
+  return blob;
+}
+
+function buildStandaloneHtml() {
+  const style = document.getElementById("appStyle").textContent;
+  return `<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LoveLat 回信產生器</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>[hidden]{display:none!important}</style>
+<style id="appStyle">${style}</style>
+</head>
+<body>
+${WRAP_SRC}
+<div id="pdfSheet" aria-hidden="true"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>
+<script id="app">${APP_SRC}<\/script>
+</body>
+</html>
+`;
+}
+
+$("#dlMd").addEventListener("click", () => saveFile(fileBase() + ".md", buildMd()));
+$("#dlHtml").addEventListener("click", () => saveFile("LoveLat回信產生器.html", buildStandaloneHtml()));
+$("#dlPdf").addEventListener("click", async (e) => {
+  if (!window.html2pdf) { exportMsg("PDF 元件沒載入，請重新整理頁面"); return; }
+  const btn = e.currentTarget; btn.disabled = true; exportMsg("產生 PDF 中…");
+  try { const blob = await buildPdf(); await saveFile(fileBase() + ".pdf", blob); }
+  catch (_) { exportMsg("PDF 產生失敗，請再試一次"); }
+  finally { btn.disabled = false; }
+});
+
+if (standalone) {
+  $("#exports").hidden = false;
+} else {
+  Promise.resolve(window.claude && window.claude.use ? window.claude.use("downloads") : null).then(ns => {
+    dl = ns;
+    $("#exports").hidden = !dl;
+  }).catch(() => {});
+}
+</script>
+</body>
+</html>
